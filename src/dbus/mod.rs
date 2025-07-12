@@ -9,7 +9,7 @@ use actix::Addr;
 use anyhow::Result;
 use fn_error_context::context;
 use log::trace;
-use zbus::blocking::{Connection, connection};
+use zbus::blocking::Connection;
 
 pub struct DBusService {
     agent_addr: Addr<UpdateAgent>,
@@ -32,15 +32,17 @@ impl DBusService {
 
     #[context("failed to start object server")]
     fn start_object_server(&mut self) -> Result<Connection> {
-        let connection = connection::Builder::system()?
-            .name("org.coreos.zincati")?
-            .serve_at("/org/coreos/zincati",
+        let connection = Connection::system()?;
+        // set up the object server
+        connection
+            .object_server()
+            .at("/org/coreos/zincati",
                 Experimental {
                     agent_addr: self.agent_addr.clone(),
-                })?
-            .build();
-
-        Ok(connection?)
+                })?;
+        // request the name
+        connection.request_name("org.coreos.zincati")?;
+        Ok(connection)
     }
 }
 
