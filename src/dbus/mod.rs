@@ -7,16 +7,13 @@ use crate::update_agent::UpdateAgent;
 use actix::prelude::*;
 use actix::Addr;
 use anyhow::Result;
-use core::convert::TryFrom;
 use fn_error_context::context;
 use log::trace;
-use zbus::blocking::{self, fdo};
-use zbus::names::WellKnownName;
-use zbus::zvariant::ObjectPath;
+use zbus::blocking::{Connection, connection};
 
 pub struct DBusService {
     agent_addr: Addr<UpdateAgent>,
-    connection: Option<blocking::Connection>,
+    connection: Option<Connection>,
 }
 
 impl DBusService {
@@ -34,22 +31,16 @@ impl DBusService {
     }
 
     #[context("failed to start object server")]
-    fn start_object_server(&mut self) -> Result<blocking::Connection> {
-        let connection = blocking::Connection::system()?;
+    fn start_object_server(&mut self) -> Result<Connection> {
+        let connection = connection::Builder::system()?
+            .name("org.coreos.zincati")?
+            .serve_at("/org/coreos/zincati",
+                Experimental {
+                    agent_addr: self.agent_addr.clone(),
+                })?
+            .build();
 
-        fdo::DBusProxy::new(&connection)?.request_name(
-            WellKnownName::from_static_str("org.coreos.zincati")?,
-            zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
-        )?;
-
-        connection.object_server().at(
-            &ObjectPath::try_from("/org/coreos/zincati")?,
-            Experimental {
-                agent_addr: self.agent_addr.clone(),
-            },
-        )?;
-
-        Ok(connection)
+        Ok(connection?)
     }
 }
 
